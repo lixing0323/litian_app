@@ -71,7 +71,7 @@
 						</view>
 					</view>
 				</view>
-				<view class="submit-btn" @click="loadCharts">确定</view>
+				<view class="submit-btn" @click="loadCharts(true)">确定</view>
 			</view>
 		</view>
 
@@ -148,9 +148,9 @@
 						fontSize: 10,
 						marginTop: 10,
 						rotateLabel: true,
-						rotateAngle: 45,
-						itemCount: 50, //可见区域数据数量
-						labelCount: 5, //可见区域标签数量
+						rotateAngle: 70,
+						itemCount: 25, //可见区域数据数量
+						labelCount: 10, //可见区域标签数量
 						scrollShow: false
 					},
 					yAxis: {
@@ -196,7 +196,7 @@
 					}
 					this.realTimer = setInterval(() => {
 						this.changeBtn(1)
-						this.loadCharts()
+						this.loadCharts(false)
 					}, 10000)
 				} else {
 					if (this.realTimer) {
@@ -221,6 +221,11 @@
 			this.changeBtn(1)
 		},
 		beforeDestroy() {
+			if (this.realTimer) {
+				clearInterval(this.realTimer)
+			}
+		},
+		onUnload() {
 			if (this.realTimer) {
 				clearInterval(this.realTimer)
 			}
@@ -407,7 +412,7 @@
 					// error
 				}
 			},
-			loadCharts() {
+			loadCharts(loading = false) {
 				// 校验数据
 				if (!this.checkValidate()) {
 					return
@@ -423,6 +428,7 @@
 					end: this.query.end + ' ' + this.query.endTime + ':00',
 					productName: this.query.productName,
 					parameterName: this.query.parameterName,
+					loading: loading,
 					callback: res => {
 						this.xAxis = []
 						this.yAxis = []
@@ -453,21 +459,19 @@
 								// if (this.yMax || this.yMax === 0) {
 
 								// }
-								if ((this.yMax || this.yMax === 0) && e.value > this.yMax) {
-									y.push(this.yMax)
-								} else if ((this.yMin || this.yMin === 0) && e.value < this.yMin) {
-									y.push(this.yMin)
-								} else {
-									y.push(e.value)
-								}
+								// if ((this.yMax || this.yMax === 0) && e.value > this.yMax) {
+								// 	y.push(this.yMax)
+								// } else if ((this.yMin || this.yMin === 0) && e.value < this.yMin) {
+								// 	y.push(this.yMin)
+								// } else {
+								// 	y.push(e.value)
+								// }
+
+								y.push(e.value)
 							})
 							// 超过上限=红色 #FF0000， 低于下限=蓝色 #0000FF	
 							this.yAxis = [{
 								name: '', // 必传！！！！！！
-								linearColor: [
-									[0, "#FF0000"],
-									[1, "#0000FF"]
-								],
 								data: y,
 							}]
 							this.initLine()

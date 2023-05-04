@@ -100,7 +100,19 @@
 			this.loadConfigInfoFromStorage()
 		},
 		onHide() {
-			if (this.timer) clearInterval(this.timer)
+			if (this.timer) {
+				clearInterval(this.timer)
+			}
+		},
+		beforeDestroy() {
+			if (this.timer) {
+				clearInterval(this.timer)
+			}
+		},
+		onUnload() {
+			if (this.timer) {
+				clearInterval(this.timer)
+			}
 		},
 		onReady() {},
 		methods: {
