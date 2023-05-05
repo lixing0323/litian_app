@@ -1,4 +1,4 @@
-import store from '@/store/index'
+import store from '@/store/index.js'
 
 const api = {
 	request() {
@@ -14,7 +14,6 @@ const api = {
 		if (!loading && loading !== false) {
 			loading = true
 		}
-		console.log(arguments)
 
 		if (loading) {
 			uni.showLoading({
@@ -56,15 +55,12 @@ const api = {
 		else if (statusCode !== 200) text = '错误' + statusCode + '：' + text
 
 		if (statusCode === 401) {
-			uni.showModal({
-				title: '系统提示',
-				content: text,
-				showCancel: false,
-				success: () => {
-					// uni.reLaunch({
-					//   url: '/pages/login/login'
-					// })
-				}
+			// token已过期，静默登录
+			const userInfo = uni.getStorageSync('userInfo')
+			store.dispatch('loginByPassword', {
+				tel: userInfo.tel,
+				username: userInfo.tel,
+				password: '123456'
 			})
 		} else if (statusCode !== 200 || !res.data.success) {
 			uni.showModal({

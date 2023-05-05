@@ -132,7 +132,7 @@
 					fontColor: "#666666",
 					background: '#FFFFFF',
 					dataLabel: true,
-					enableScroll: true, // 开启滚动条，X轴配置里需要配置itemCount单屏幕数据点数量
+					// enableScroll: true, // 开启滚动条，X轴配置里需要配置itemCount单屏幕数据点数量
 					enableMarkLine: true, // 是否启用标记线功能
 					disableScroll: true, // 在图表上滑动时禁止页面滚动。开启后，触摸图表时将会禁止屏幕滚动以及下拉刷新
 					dataLabel: false, // 是否在图表中显示标注，默认为true
@@ -149,7 +149,7 @@
 						marginTop: 10,
 						rotateLabel: true,
 						rotateAngle: 70,
-						itemCount: 25, //可见区域数据数量
+						// itemCount: 25, //可见区域数据数量
 						labelCount: 10, //可见区域标签数量
 						scrollShow: false
 					},
