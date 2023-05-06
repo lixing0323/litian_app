@@ -8,17 +8,21 @@
 						<text>结束时间</text>
 					</view>
 					<view class="time-picker">
-						<picker class="picker" mode="date" :value="query.start" @change="changeStartDate">
+						<picker class="picker" :disabled="disabledTime" mode="date" :value="query.start"
+							@change="query.start = $event.detail.value">
 							<view class="time">{{query.start}}</view>
 						</picker>
-						<picker class="picker" mode="time" :value="query.startTime" @change="changeStartTime">
+						<picker class="picker" :disabled="disabledTime" mode="time" :value="query.startTime"
+							@change="query.startTime = $event.detail.value">
 							<view class="time">{{query.startTime}}</view>
 						</picker>
 						<image src="/static/images/icon/dash.png"></image>
-						<picker class="picker" mode="date" :value="query.end" @change="changeEndDate">
+						<picker class="picker" :disabled="disabledTime" mode="date" :value="query.end"
+							@change="query.end = $event.detail.value">
 							<view class="time">{{query.end}}</view>
 						</picker>
-						<picker class="picker" mode="time" :value="query.endTime" @change="changeEndTime">
+						<picker class="picker" :disabled="disabledTime" mode="time" :value="query.endTime"
+							@change="query.endTime = $event.detail.value">
 							<view class="time">{{query.endTime}}</view>
 						</picker>
 					</view>
@@ -40,10 +44,8 @@
 					</view>
 				</view>
 				<view class="chart-btn">
-					<text class="btn" :class="{'active-btn': activeBtn === 1}" @click="changeBtn(1)">1h</text>
-					<text class="btn" :class="{'active-btn': activeBtn === 8}" @click="changeBtn(8)">8h</text>
-					<text class="btn" :class="{'active-btn': activeBtn === 12}" @click="changeBtn(12)">12h</text>
-					<text class="btn" :class="{'active-btn': activeBtn === 24}" @click="changeBtn(24)">24h</text>
+					<text v-for="(bt, index) in buttons" :key="index" class="btn"
+						:class="{'active-btn': selectedTimeIdx === index}" @click="changeBtn(index, bt)">{{ bt }}</text>
 				</view>
 				<view class="limit-list form">
 					<view class="form-item">
@@ -51,7 +53,15 @@
 							<text class="text">实时更新</text>
 						</view>
 						<view class="right-content">
-							<switch @change="switchChange" />
+							<switch :checked="realTimeUpdateFlag" @change="switchChangeRealTime" />
+						</view>
+					</view>
+					<view class="form-item">
+						<view class="left-content">
+							<text class="text">数据全部显示</text>
+						</view>
+						<view class="right-content">
+							<switch :checked="allShowUpdateFlag" @change="switchChangeAllShow" />
 						</view>
 					</view>
 					<view class="form-item">
@@ -75,16 +85,42 @@
 			</view>
 		</view>
 
-		<view class="charts-box" v-if="chartData.result.length > 0">
+		<view class="charts-box" v-if="xAxis.length > 0">
+			<view class="charts-text">
+				<view class="item">
+					<view class="left">
+						<view class="label">最大值</view>
+						<view class="time">{{ parseTime(statistics.maxTime, '{m}-{d} {h}:{i}:{s}') }}</view>
+					</view>
+					<view class="right">{{ statistics.maxVal }}</view>
+				</view>
+				<view class="item line">
+					<view class="left">
+						<view class="label">平均值</view>
+					</view>
+					<view class="right">{{ statistics.avgVal }}</view>
+				</view>
+			</view>
 
 			<view class="charts-text">
-				<view>最大值：{{chartData.statistics.maxVal}}</view>
-				<view>最小值：{{chartData.statistics.minVal}}</view>
-				<view>平均值：{{chartData.statistics.avgVal}}</view>
-				<view>合格率：{{chartData.statistics.rate}}%</view>
+				<view class="item">
+					<view class="left">
+						<view class="label">最小值</view>
+						<view class="time">{{ parseTime(statistics.minTime, '{m}-{d} {h}:{i}:{s}') }}</view>
+					</view>
+					<view class="right">{{ statistics.minVal }}</view>
+				</view>
+				<view class="item line">
+					<view class="left">
+						<view class="label">合格率</view>
+					</view>
+					<view class="right">{{ statistics.rate}}%</view>
+				</view>
 			</view>
+
 			<view class="charts" :style="{'height':cHeight*pixelRatio + 'px'}">
-				<qiun-data-charts type="line" :canvas2d="true" :opts="opts" :chartData="qiunData" />
+				<qiun-data-charts ref="ucharts" :animation="false" type="line" :canvas2d="true" :opts="opts"
+					:chartData="chartData" />
 			</view>
 		</view>
 
@@ -96,8 +132,7 @@
 		mapGetters,
 		mapActions
 	} from 'vuex'
-	let _self = null;
-	let canvaColumn = null;
+
 	export default {
 		data() {
 			return {
@@ -106,6 +141,15 @@
 				endTime: '',
 				yMax: '',
 				yMin: '',
+				statistics: {
+					maxVal: 0,
+					maxTime: '-',
+					minVal: 0,
+					minTime: '-',
+					avgVal: 0,
+					avgTime: '-',
+					rate: 0
+				},
 				query: {
 					start: '',
 					startTime: '',
@@ -114,13 +158,14 @@
 					productName: '',
 					parameterName: '',
 				},
+				selectedTimeIdx: 0,
+				selectedTimeName: '1小时',
+				hourBts: ['1小时', '2小时', '8小时', '自定义'],
+				miniteBts: ['10分钟', '30分钟', '60分钟', '自定义'],
 				activeBtn: 0,
 				nameIdx: 0,
 				paramIdx: 0,
-				chartData: {
-					result: []
-				},
-				qiunData: [],
+				chartData: [],
 				opts: {
 					timing: "easeOut",
 					duration: 1000,
@@ -131,11 +176,9 @@
 					fontSize: 12,
 					fontColor: "#666666",
 					background: '#FFFFFF',
-					dataLabel: true,
-					// enableScroll: true, // 开启滚动条，X轴配置里需要配置itemCount单屏幕数据点数量
+					dataLabel: false,
 					enableMarkLine: true, // 是否启用标记线功能
 					disableScroll: true, // 在图表上滑动时禁止页面滚动。开启后，触摸图表时将会禁止屏幕滚动以及下拉刷新
-					dataLabel: false, // 是否在图表中显示标注，默认为true
 					dataPointShape: false, // 是否在图表中显示数据点图形标识
 					legend: {
 						show: false
@@ -149,8 +192,6 @@
 						marginTop: 10,
 						rotateLabel: true,
 						rotateAngle: 70,
-						// itemCount: 25, //可见区域数据数量
-						labelCount: 10, //可见区域标签数量
 						scrollShow: false
 					},
 					yAxis: {
@@ -174,11 +215,11 @@
 					},
 				},
 				xAxis: [],
-				yAxis: [],
 				pixelRatio: 1,
 				cWidth: '',
 				cHeight: '',
 				realTimeUpdateFlag: false,
+				allShowUpdateFlag: false,
 				realTimer: '',
 			}
 		},
@@ -186,16 +227,25 @@
 			...mapGetters([
 				'deviceNameParamList',
 				'deviceNameList',
-			])
+			]),
+			disabledTime() {
+				return this.selectedTimeIdx !== 3
+			},
+			buttons() {
+				return this.realTimeUpdateFlag ? this.miniteBts : this.hourBts
+			},
 		},
 		watch: {
 			realTimeUpdateFlag(val, old) {
+				// 实时数据立即调用接口
+				this.changeBtn(this.selectedTimeIdx)
+				this.loadCharts(false)
+
 				if (val) {
 					if (this.realTimer) {
 						clearInterval(this.realTimer)
 					}
 					this.realTimer = setInterval(() => {
-						this.changeBtn(1)
 						this.loadCharts(false)
 					}, 10000)
 				} else {
@@ -204,6 +254,11 @@
 					}
 				}
 			},
+			allShowUpdateFlag(val) {
+				// 重新配置参数
+				this.resetEChartsOption()
+				this.saveConfigInfo()
+			}
 		},
 		onLoad(option) {
 			this.id = option.id
@@ -217,8 +272,6 @@
 					this.cWidth = res.screenWidth - 20
 				}
 			})
-			_self = this
-			this.changeBtn(1)
 		},
 		beforeDestroy() {
 			if (this.realTimer) {
@@ -236,22 +289,6 @@
 				'loadDeviceName',
 				'loadDeviceParamByName',
 			]),
-			changeStartDate(e) {
-				this.query.start = e.detail.value
-				this.activeBtn = 0
-			},
-			changeEndDate(e) {
-				this.query.end = e.detail.value
-				this.activeBtn = 0
-			},
-			changeStartTime(e) {
-				this.query.startTime = e.detail.value
-				this.activeBtn = 0
-			},
-			changeEndTime(e) {
-				this.query.endTime = e.detail.value
-				this.activeBtn = 0
-			},
 			parseTime(time, cFormat) {
 				if (arguments.length === 0) {
 					return null
@@ -288,23 +325,13 @@
 				})
 				return time_str
 			},
-			getTime(i) {
-				let now = new Date()
-				let startTime = new Date(now.getTime() - i * 3600000)
-				// format
-				this.query.start = this.parseTime(startTime, '{y}-{m}-{d}')
-				this.query.startTime = this.parseTime(startTime, '{h}:{i}')
-				this.query.end = this.parseTime(now, '{y}-{m}-{d}')
-				this.query.endTime = this.parseTime(now, '{h}:{i}')
-				this.startTime = this.parseTime(startTime)
-				this.endTime = this.parseTime(now)
-			},
 			init() {
+				// 从本地读取数据
+				this.loadConfigInfoFromStorage()
+				this.changeBtn(this.selectedTimeIdx)
 				this.loadDeviceName({
 					id: this.id,
 					callback: res => {
-						// 从本地读取数据
-						this.loadConfigInfoFromStorage()
 						// 设备信息
 						if (this.deviceNameList.length > 0) {
 							if (this.query.productName) {
@@ -331,9 +358,36 @@
 					}
 				})
 			},
-			changeBtn(i) {
-				this.activeBtn = i
-				this.getTime(i)
+			isSelfTime() {
+				return this.selectedTimeIdx === 3
+			},
+			getTimeValue(timeName) {
+				let val
+				if (!this.isSelfTime()) {
+					val = this.realTimeUpdateFlag ? this.selectedTimeName.replace(/分钟/g, '') :
+						this.selectedTimeName.replace(/小时/g, '')
+				}
+				return Number(val)
+			},
+			changeBtn(index = 0, name) {
+				// 设置已选中的时间
+				this.selectedTimeIdx = index
+				this.selectedTimeName = !name ? this.buttons[index] : name
+				// 非自定义，设置时间
+				if (!this.isSelfTime()) {
+					let now = new Date()
+					// 实时时间以分钟为单位，否则以小时为单位
+					let value = this.getTimeValue(this.selectedTimeName)
+					const multiple = this.realTimeUpdateFlag ? 60000 : 3600000
+					const startTime = new Date(now.getTime() - value * multiple)
+					// format
+					this.query.start = this.parseTime(startTime, '{y}-{m}-{d}')
+					this.query.startTime = this.parseTime(startTime, '{h}:{i}')
+					this.query.end = this.parseTime(now, '{y}-{m}-{d}')
+					this.query.endTime = this.parseTime(now, '{h}:{i}')
+					this.startTime = this.parseTime(startTime)
+					this.endTime = this.parseTime(now)
+				}
 			},
 			isValidY(y) {
 				return y || y === 0
@@ -359,6 +413,7 @@
 			},
 			resetEChartsOption() {
 				const data = []
+				// 标记线
 				this.opts.extra.markLine = {
 					type: "dash",
 					dashLength: 4,
@@ -378,6 +433,16 @@
 						showLabel: true
 					})
 				}
+				// 数据全部显示
+				if (this.allShowUpdateFlag) {
+					this.opts.enableScroll = false
+					this.opts.xAxis.format = 'xAxisDemo3'
+				} else {
+					this.opts.enableScroll = true // 开启滚动条，X轴配置里需要配置itemCount单屏幕数据点数量
+					this.opts.xAxis.itemCount = 25 // 可见区域数据数量
+					this.opts.xAxis.labelCount = 10 //可见区域标签数量
+					this.opts.xAxis.format = 'xAxisDemo4'
+				}
 			},
 			saveConfigInfo() {
 				const data = {
@@ -389,7 +454,10 @@
 					parameterName: this.query.parameterName,
 					yMax: this.yMax,
 					yMin: this.yMin,
-					activeBtn: this.activeBtn
+					selectedTimeIdx: this.selectedTimeIdx,
+					selectedTimeName: this.selectedTimeName,
+					allShowUpdateFlag: this.allShowUpdateFlag,
+					realTimeUpdateFlag: this.realTimeUpdateFlag
 				}
 				uni.setStorageSync('device-query-params', JSON.stringify(data))
 			},
@@ -398,15 +466,20 @@
 					const value = uni.getStorageSync('device-query-params');
 					if (value) {
 						const data = JSON.parse(value)
-						this.query.start = data.start
-						this.query.end = data.end
-						this.query.startTime = data.startTime
-						this.query.endTime = data.endTime
 						this.query.productName = data.productName
 						this.query.parameterName = data.parameterName
 						this.yMin = data.yMin
 						this.yMax = data.yMax
-						this.activeBtn = data.activeBtn
+						this.selectedTimeIdx = data.selectedTimeIdx
+						this.selectedTimeName = data.selectedTimeName
+						this.allShowUpdateFlag = data.allShowUpdateFlag
+						this.realTimeUpdateFlag = data.realTimeUpdateFlag
+						if (this.isSelfTime()) {
+							this.query.start = data.start
+							this.query.end = data.end
+							this.query.startTime = data.startTime
+							this.query.endTime = data.endTime
+						}
 					}
 				} catch (e) {
 					// error
@@ -431,22 +504,18 @@
 					loading: loading,
 					callback: res => {
 						this.xAxis = []
-						this.yAxis = []
 						if (res.data.content.length > 0) {
-							this.chartData = res.data.content[0]
-							this.chartData.statistics.maxVal = this.chartData.statistics.max.toFixed(this.chartData
-								.statistics
-								.decimalDigits)
-							this.chartData.statistics.minVal = this.chartData.statistics.min.toFixed(this.chartData
-								.statistics
-								.decimalDigits)
-							this.chartData.statistics.avgVal = this.chartData.statistics.avg.toFixed(this.chartData
-								.statistics
-								.decimalDigits)
-							let result = this.chartData.result
-							let y = [],
-								highY = [],
-								lowY = []
+							// 统计数据
+							const content = res.data.content[0]
+							let result = content.result
+							const decimal = content.statistics.decimalDigits
+							const statistics = content.statistics
+							this.statistics.maxVal = statistics.max.toFixed(decimal)
+							this.statistics.minVal = statistics.min.toFixed(decimal)
+							this.statistics.avgVal = statistics.avg.toFixed(decimal)
+							this.statistics.rate = statistics.rate
+							// 结果
+							let y = []
 							let index = 0
 							result.forEach(e => {
 								let list = e.ctime.split(' ')
@@ -455,26 +524,24 @@
 								let date = dateList[1] + '.' + dateList[2] + ' ' + timeList[0] + ':' + timeList[1] + ':' +
 									timeList[2]
 								this.xAxis.push(date)
-								// 如果填写了最大值
-								// if (this.yMax || this.yMax === 0) {
-
-								// }
-								// if ((this.yMax || this.yMax === 0) && e.value > this.yMax) {
-								// 	y.push(this.yMax)
-								// } else if ((this.yMin || this.yMin === 0) && e.value < this.yMin) {
-								// 	y.push(this.yMin)
-								// } else {
-								// 	y.push(e.value)
-								// }
-
 								y.push(e.value)
+
+								// 时间值
+								const currentVal = Number(e.value).toFixed(decimal)
+								if (this.statistics.maxVal === currentVal) {
+									this.statistics.maxTime = e.ctime
+								} else if (this.statistics.minVal === currentVal) {
+									this.statistics.minTime = e.ctime
+								}
 							})
-							// 超过上限=红色 #FF0000， 低于下限=蓝色 #0000FF	
-							this.yAxis = [{
-								name: '', // 必传！！！！！！
-								data: y,
-							}]
-							this.initLine()
+							// 点
+							this.chartData = JSON.parse(JSON.stringify({
+								categories: this.xAxis,
+								series: [{
+									name: '',
+									data: y
+								}]
+							}));
 						} else {
 							uni.showToast({
 								title: '暂无数据',
@@ -500,16 +567,12 @@
 				this.paramIdx = e.detail.value
 				this.query.parameterName = this.deviceNameParamList[this.paramIdx]
 			},
-			initLine() {
-				this.qiunData = JSON.parse(JSON.stringify({
-					categories: this.xAxis,
-					series: this.yAxis
-				}));
-			},
-			switchChange(e) {
-				console.log('switch2 发生 change 事件，携带值为', e.target.value)
+			switchChangeRealTime(e) {
 				this.realTimeUpdateFlag = e.target.value
 			},
+			switchChangeAllShow(e) {
+				this.allShowUpdateFlag = e.target.value
+			}
 		}
 	}
 </script>
@@ -527,8 +590,6 @@
 			box-sizing: border-box;
 
 			.head-box {
-				width: 710rpx;
-				margin: 0 auto;
 				background: #fff;
 				box-shadow: 0 0 12rpx 0 rgba(0, 0, 0, 0.2);
 				border-radius: 8rpx;
@@ -663,19 +724,48 @@
 		}
 
 		.charts-box {
-			margin-top: 824rpx;
+			margin-top: 936rpx;
 			padding: 20rpx;
 			width: 100%;
 			//overflow-x: auto;
 			box-sizing: border-box;
 
 			.charts-text {
-				margin-bottom: 20rpx;
+				margin-bottom: 8rpx;
+				display: flex;
+				background-color: #eee;
 
-				view {
-					font-size: 24rpx;
-					color: #333;
-					margin-bottom: 10rpx;
+				.line {
+					border-left: 1px dashed grey;
+				}
+
+				.item {
+					flex: 1;
+					padding: 10rpx;
+					display: flex;
+					justify-items: center;
+					align-items: center;
+
+					.left {
+						flex: 1;
+						text-align: center;
+
+						.label {
+							font-size: 30rpx;
+							font-weight: bold;
+						}
+
+						.time {
+							font-size: 20rpx;
+							color: #666;
+						}
+					}
+
+					.right {
+						flex: 1;
+						font-size: 32rpx;
+						text-align: center;
+					}
 				}
 			}
 		}

@@ -140,7 +140,6 @@
 						const data = JSON.parse(value)
 						this.yMin = data.yMin
 						this.yMax = data.yMax
-						console.log(this.yMin, this.yMax)
 					}
 				} catch (e) {
 					// error
