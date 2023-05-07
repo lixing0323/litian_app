@@ -8,22 +8,20 @@
 						<text>结束时间</text>
 					</view>
 					<view class="time-picker">
-						<picker class="picker" :disabled="disabledTime" mode="date" :value="query.start"
-							@change="query.start = $event.detail.value">
-							<view class="time">{{query.start}}</view>
+						<picker class="picker" :disabled="disabledTime" mode="date" :value="query.startDate"
+							@change="changeStartDate">
+							<view class="time" :class="{'self-color': isSelfTime()}">{{query.startDate}}</view>
 						</picker>
 						<picker class="picker" :disabled="disabledTime" mode="time" :value="query.startTime"
-							@change="query.startTime = $event.detail.value">
-							<view class="time">{{query.startTime}}</view>
+							@change="changeStartTime">
+							<view class="time" :class="{'self-color': isSelfTime()}">{{query.startTime}}</view>
 						</picker>
 						<image src="/static/images/icon/dash.png"></image>
-						<picker class="picker" :disabled="disabledTime" mode="date" :value="query.end"
-							@change="query.end = $event.detail.value">
-							<view class="time">{{query.end}}</view>
+						<picker class="picker" :disabled="disabledTime" mode="date" :value="query.endDate" @change="changeEndDate">
+							<view class="time" :class="{'self-color': isSelfTime()}">{{query.endDate}}</view>
 						</picker>
-						<picker class="picker" :disabled="disabledTime" mode="time" :value="query.endTime"
-							@change="query.endTime = $event.detail.value">
-							<view class="time">{{query.endTime}}</view>
+						<picker class="picker" :disabled="disabledTime" mode="time" :value="query.endTime" @change="changeEndTime">
+							<view class="time" :class="{'self-color': isSelfTime()}">{{query.endTime}}</view>
 						</picker>
 					</view>
 				</view>
@@ -69,7 +67,7 @@
 							<text class="text">y轴最大值</text>
 						</view>
 						<view class="right-content">
-							<input type="number" v-model="yMax" class="input" placeholder="请输入">
+							<input type="number" v-model="yMax" class="input" @change="changeYMaxValue" placeholder="请输入">
 						</view>
 					</view>
 					<view class="form-item">
@@ -77,11 +75,11 @@
 							<text class="text">y轴最小值</text>
 						</view>
 						<view class="right-content">
-							<input type="number" v-model="yMin" class="input" placeholder="请输入">
+							<input type="number" v-model="yMin" class="input" @change="changeYMinValue" placeholder="请输入">
 						</view>
 					</view>
 				</view>
-				<view class="submit-btn" @click="loadCharts(true)">确定</view>
+				<view class="submit-btn" @click="submit()">确定</view>
 			</view>
 		</view>
 
@@ -118,7 +116,7 @@
 				</view>
 			</view>
 
-			<view class="charts" :style="{'height':cHeight*pixelRatio + 'px'}">
+			<view class="charts" :style="{'height':cHeight + 'px'}">
 				<qiun-data-charts ref="ucharts" :animation="false" type="line" :canvas2d="true" :opts="opts"
 					:chartData="chartData" />
 			</view>
@@ -137,8 +135,6 @@
 		data() {
 			return {
 				id: '',
-				startTime: '',
-				endTime: '',
 				yMax: '',
 				yMin: '',
 				statistics: {
@@ -151,9 +147,9 @@
 					rate: 0
 				},
 				query: {
-					start: '',
+					startDate: '',
 					startTime: '',
-					end: '',
+					endDate: '',
 					endTime: '',
 					productName: '',
 					parameterName: '',
@@ -162,7 +158,6 @@
 				selectedTimeName: '1小时',
 				hourBts: ['1小时', '2小时', '8小时', '自定义'],
 				miniteBts: ['10分钟', '30分钟', '60分钟', '自定义'],
-				activeBtn: 0,
 				nameIdx: 0,
 				paramIdx: 0,
 				chartData: [],
@@ -176,7 +171,7 @@
 					fontSize: 12,
 					fontColor: "#666666",
 					background: '#FFFFFF',
-					dataLabel: false,
+					dataLabel: false, // 是否显示图表区域内数据点上方的数据文案
 					enableMarkLine: true, // 是否启用标记线功能
 					disableScroll: true, // 在图表上滑动时禁止页面滚动。开启后，触摸图表时将会禁止屏幕滚动以及下拉刷新
 					dataPointShape: false, // 是否在图表中显示数据点图形标识
@@ -215,7 +210,6 @@
 					},
 				},
 				xAxis: [],
-				pixelRatio: 1,
 				cWidth: '',
 				cHeight: '',
 				realTimeUpdateFlag: false,
@@ -236,28 +230,12 @@
 			},
 		},
 		watch: {
-			realTimeUpdateFlag(val, old) {
-				// 实时数据立即调用接口
-				this.changeBtn(this.selectedTimeIdx)
-				this.loadCharts(false)
-
-				if (val) {
-					if (this.realTimer) {
-						clearInterval(this.realTimer)
-					}
-					this.realTimer = setInterval(() => {
-						this.loadCharts(false)
-					}, 10000)
-				} else {
+			realTimeUpdateFlag(val) {
+				if (!val) {
 					if (this.realTimer) {
 						clearInterval(this.realTimer)
 					}
 				}
-			},
-			allShowUpdateFlag(val) {
-				// 重新配置参数
-				this.resetEChartsOption()
-				this.saveConfigInfo()
 			}
 		},
 		onLoad(option) {
@@ -267,7 +245,6 @@
 		mounted() {
 			uni.getSystemInfo({
 				success: res => {
-					// this.cHeight = (res.screenHeight * 0.9) / 2 - 40
 					this.cHeight = res.screenHeight - 90 - 100
 					this.cWidth = res.screenWidth - 20
 				}
@@ -381,13 +358,12 @@
 					const multiple = this.realTimeUpdateFlag ? 60000 : 3600000
 					const startTime = new Date(now.getTime() - value * multiple)
 					// format
-					this.query.start = this.parseTime(startTime, '{y}-{m}-{d}')
+					this.query.startDate = this.parseTime(startTime, '{y}-{m}-{d}')
 					this.query.startTime = this.parseTime(startTime, '{h}:{i}')
-					this.query.end = this.parseTime(now, '{y}-{m}-{d}')
+					this.query.endDate = this.parseTime(now, '{y}-{m}-{d}')
 					this.query.endTime = this.parseTime(now, '{h}:{i}')
-					this.startTime = this.parseTime(startTime)
-					this.endTime = this.parseTime(now)
 				}
+				this.clearChartData()
 			},
 			isValidY(y) {
 				return y || y === 0
@@ -439,15 +415,15 @@
 					this.opts.xAxis.format = 'xAxisDemo3'
 				} else {
 					this.opts.enableScroll = true // 开启滚动条，X轴配置里需要配置itemCount单屏幕数据点数量
-					this.opts.xAxis.itemCount = 25 // 可见区域数据数量
+					this.opts.xAxis.itemCount = 10 // 可见区域数据数量
 					this.opts.xAxis.labelCount = 10 //可见区域标签数量
 					this.opts.xAxis.format = 'xAxisDemo4'
 				}
 			},
 			saveConfigInfo() {
 				const data = {
-					start: this.query.start,
-					end: this.query.end,
+					startDate: this.query.startDate,
+					endDate: this.query.endDate,
 					startTime: this.query.startTime,
 					endTime: this.query.endTime,
 					productName: this.query.productName,
@@ -475,14 +451,22 @@
 						this.allShowUpdateFlag = data.allShowUpdateFlag
 						this.realTimeUpdateFlag = data.realTimeUpdateFlag
 						if (this.isSelfTime()) {
-							this.query.start = data.start
-							this.query.end = data.end
+							this.query.startDate = data.startDate
+							this.query.endDate = data.endDate
 							this.query.startTime = data.startTime
 							this.query.endTime = data.endTime
 						}
 					}
 				} catch (e) {
 					// error
+				}
+			},
+			submit() {
+				this.loadCharts(true)
+				if (this.realTimeUpdateFlag) {
+					this.realTimer = setInterval(() => {
+						this.loadCharts(false)
+					}, 10000)
 				}
 			},
 			loadCharts(loading = false) {
@@ -497,8 +481,8 @@
 				// 获取服务器数据
 				this.loadDeviceChart({
 					id: this.id,
-					start: this.query.start + ' ' + this.query.startTime + ':00',
-					end: this.query.end + ' ' + this.query.endTime + ':00',
+					start: this.query.startDate + ' ' + this.query.startTime + ':00',
+					end: this.query.endDate + ' ' + this.query.endTime + ':00',
 					productName: this.query.productName,
 					parameterName: this.query.parameterName,
 					loading: loading,
@@ -552,6 +536,7 @@
 				})
 			},
 			changeName(e) {
+				this.clearChartData()
 				this.nameIdx = e.detail.value
 				this.query.productName = this.deviceNameList[this.nameIdx]
 				this.loadDeviceParamByName({
@@ -564,14 +549,42 @@
 				})
 			},
 			changeParam(e) {
+				this.clearChartData()
 				this.paramIdx = e.detail.value
 				this.query.parameterName = this.deviceNameParamList[this.paramIdx]
 			},
+			clearChartData() {
+				this.xAxis = []
+			},
 			switchChangeRealTime(e) {
 				this.realTimeUpdateFlag = e.target.value
+				this.clearChartData()
 			},
 			switchChangeAllShow(e) {
 				this.allShowUpdateFlag = e.target.value
+				this.clearChartData()
+			},
+			changeStartDate(e) {
+				this.query.startDate = e.detail.value
+				this.clearChartData()
+			},
+			changeStartTime(e) {
+				this.query.startTime = e.detail.value
+				this.clearChartData()
+			},
+			changeEndDate(e) {
+				this.query.endDate = e.detail.value
+				this.clearChartData()
+			},
+			changeEndTime(e) {
+				this.query.endTime = e.detail.value
+				this.clearChartData()
+			},
+			changeYMaxValue(e) {
+				this.clearChartData()
+			},
+			changeYMinValue(e) {
+				this.clearChartData()
 			}
 		}
 	}
@@ -774,5 +787,12 @@
 			width: 100%;
 			height: 378px;
 		}
+	}
+
+	.self-color {
+		color: #0086FF !important;
+		border: 1px solid !important;
+		border-radius: 8rpx;
+		padding: 0 3px !important;
 	}
 </style>

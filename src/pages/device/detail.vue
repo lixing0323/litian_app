@@ -44,8 +44,8 @@
 		<view class="tab-content">
 			<view class="tabbar">
 				<view class="item middle-block" @click="changeTab(1)" :class="{'active-item': activeIdx === 1}">检测参数</view>
-				<view class="item middle-block" @click="changeTab(2)" :class="{'active-item': activeIdx === 2}">状态信息</view>
-
+				<view v-if="false" class="item middle-block" @click="changeTab(2)" :class="{'active-item': activeIdx === 2}">
+					状态信息</view>
 			</view>
 			<view v-if="activeIdx === 2">
 				<view class="tab-item">
