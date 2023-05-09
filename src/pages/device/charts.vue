@@ -17,11 +17,13 @@
 							<view class="time" :class="{'self-color': isSelfTime()}">{{query.startTime}}</view>
 						</picker>
 						<image src="/static/images/icon/dash.png"></image>
-						<picker class="picker" :disabled="disabledTime" mode="date" :value="query.endDate" @change="changeEndDate">
-							<view class="time" :class="{'self-color': isSelfTime()}">{{query.endDate}}</view>
+						<picker class="picker" :disabled="disabledTime || realTimeUpdateFlag" mode="date" :value="query.endDate"
+							@change="changeEndDate">
+							<view class="time" :class="{'self-color': isSelfTime()&&!realTimeUpdateFlag}">{{query.endDate}}</view>
 						</picker>
-						<picker class="picker" :disabled="disabledTime" mode="time" :value="query.endTime" @change="changeEndTime">
-							<view class="time" :class="{'self-color': isSelfTime()}">{{query.endTime}}</view>
+						<picker class="picker" :disabled="disabledTime || realTimeUpdateFlag" mode="time" :value="query.endTime"
+							@change="changeEndTime">
+							<view class="time" :class="{'self-color': isSelfTime()&&!realTimeUpdateFlag}">{{query.endTime}}</view>
 						</picker>
 					</view>
 				</view>
@@ -223,7 +225,7 @@
 				'deviceNameList',
 			]),
 			disabledTime() {
-				return this.selectedTimeIdx !== 3
+				return !this.isSelfTime()
 			},
 			buttons() {
 				return this.realTimeUpdateFlag ? this.miniteBts : this.hourBts
@@ -350,6 +352,12 @@
 				// 设置已选中的时间
 				this.selectedTimeIdx = index
 				this.selectedTimeName = !name ? this.buttons[index] : name
+
+				// 结束时间
+				let now = new Date()
+				this.query.endDate = this.parseTime(now, '{y}-{m}-{d}')
+				this.query.endTime = this.parseTime(now, '{h}:{i}')
+
 				// 非自定义，设置时间
 				if (!this.isSelfTime()) {
 					let now = new Date()
@@ -360,8 +368,6 @@
 					// format
 					this.query.startDate = this.parseTime(startTime, '{y}-{m}-{d}')
 					this.query.startTime = this.parseTime(startTime, '{h}:{i}')
-					this.query.endDate = this.parseTime(now, '{y}-{m}-{d}')
-					this.query.endTime = this.parseTime(now, '{h}:{i}')
 				}
 				this.clearChartData()
 			},
@@ -465,6 +471,7 @@
 				this.loadCharts(true)
 				if (this.realTimeUpdateFlag) {
 					this.realTimer = setInterval(() => {
+						this.changeBtn(this.selectedTimeIdx)
 						this.loadCharts(false)
 					}, 10000)
 				}
