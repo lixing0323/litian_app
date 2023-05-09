@@ -348,7 +348,7 @@
 				}
 				return Number(val)
 			},
-			changeBtn(index = 0, name) {
+			changeBtn(index = 0, name, clear = true) {
 				// 设置已选中的时间
 				this.selectedTimeIdx = index
 				this.selectedTimeName = !name ? this.buttons[index] : name
@@ -369,7 +369,11 @@
 					this.query.startDate = this.parseTime(startTime, '{y}-{m}-{d}')
 					this.query.startTime = this.parseTime(startTime, '{h}:{i}')
 				}
-				this.clearChartData()
+
+				// 清除数据
+				if (clear) {
+					this.clearChartData()
+				}
 			},
 			isValidY(y) {
 				return y || y === 0
@@ -471,7 +475,7 @@
 				this.loadCharts(true)
 				if (this.realTimeUpdateFlag) {
 					this.realTimer = setInterval(() => {
-						this.changeBtn(this.selectedTimeIdx)
+						this.changeBtn(this.selectedTimeIdx, undefined, false)
 						this.loadCharts(false)
 					}, 10000)
 				}
@@ -565,7 +569,6 @@
 			},
 			switchChangeRealTime(e) {
 				this.realTimeUpdateFlag = e.target.value
-				this.clearChartData()
 			},
 			switchChangeAllShow(e) {
 				this.allShowUpdateFlag = e.target.value
